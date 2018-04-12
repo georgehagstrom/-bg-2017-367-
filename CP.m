@@ -90,7 +90,10 @@ cc = aph*phiM*3600;
         optF1alt = fzero(dPaLf,[0,k2*L/(k1+k2)]);
     end
     
-    
+    % The function truePA calculates the photosynthetic rate from the irradiance and from the investment in light 
+    % harvesting apparatus. This implements the method in Talmy, Gedier, et. al. The function relies on optF1alt,
+    % which determines how to optimally divide investments in photosynthesis between electron transport and carbon
+    % fixation
 
     function truePA = truePA(L,I)
         if L==0
@@ -115,7 +118,8 @@ Q10k = 2.0;
 % Now for uptake rate terms:
 
 
-% Allometric Predictors:
+% Allometric Predictors: These are taken from nutrient uptake measurements of numerous types of plankton, reported in 
+% the literature as Edwards and Li
 
     function KPAllometry = KPAllometry(r)
         Volume = 4.0/3.0*pi*r^3;
@@ -136,7 +140,10 @@ Q10k = 2.0;
 
 
 alphaE=.55;
+ % We set the contribution of phospholipids to the P pool to 0, this has the effect of making them part of the storge pool
+ 
 PPhosphoLipid = .042*0;
+
 PDNA = .095;
 PRibosomeEu = .047;
 
@@ -160,15 +167,6 @@ CLipid = .76;
         totalP = ((.3*alphaS/r+.05)*PPhosphoLipid+alphaE*E*PRibosomeEu+.01*PDNA)/31;
     end
 
-    function totalPM = totalPM(E,r)
-        totalPM = (.1*PPhosphoLipid+alphaE*E*PRibosomeEu+.01*PDNA)/31;
-    end
-
-
-    function totalN = totalN(E,r)
-        totalN = ((.3*alphaS/r+.05)*NPhospholipid+.7*alphaS*NProtein/r+(1-alphaE)*E*NProtein+alphaE*E*NRibosomeEu+(1-E-alphaS/r-gamma)*NProtein+.01*NDNA)/14.0;
-    end
-
     function totalC= totalC(E,r)
         totalC = ((.3*alphaS/r+.05)*CPhospholipid+.7*alphaS*CProtein/r+.10*CLipid+.04*CCarb+(1-alphaE)*E*CProtein+alphaE*E*CRibosomeEu+(1-E-alphaS/r-gamma)*CProtein+.01*CDNA)/12.0;
     end
@@ -188,10 +186,6 @@ CLipid = .76;
 
 
 % We are in position to define the growth rate as a function of environmental conditions and strategy
-
-
-
-
 
     function muGeider = muGeider(r,E,I,T,P)
         L = 1-S(r)-E;
@@ -224,24 +218,30 @@ function [rr,EE] = optimalStrategyGeider(I,T,P)
         c =  -VMaxPAllometry(r)*P/(P+KPAllometry(r))*1/(mDryCell(pDryWeight,rho,r));
     end
     
+    % We are able to find a quadratic equation for biosynthesis as a function of cell radius to balance the
+    % growth rate from biosynthesis and nutrient uptake.
     
     function E = E(r)
         E = (-b(r)+sqrt(b(r)^2-4*a*c(r)))/(2*a);
     end
 
-    
+    % To find the optimal strategy, we balance biosynthesis and photosynthesis, as a function of radius,
+    % assuming that the investment in biosynthesis is E(r)
     
     zeroFunction = @(r)fBio(E(r),T)-(truePA(1-S(r)-E(r),I)-PhiM(T))/(1+PhiS);
     
     
     rMinFunction = @(r) muP(r,0,P)-fBio(1-S(r)-E(r),10);
     
-
+    % These routines make sure that the root finder either finds a solution or reports a problem
+    
     if rMinFunction(alphaS/(1-gamma))*rMinFunction(1000)>0
         rr = nan;
         EE = nan;
         return 
     end
+    
+    
     
     rMin = fzero(rMinFunction,[alphaS/(1-gamma),1000]);
     
@@ -250,16 +250,19 @@ function [rr,EE] = optimalStrategyGeider(I,T,P)
         EE = nan;
         return
     end
+    
+    % Calculation of optimal radius
     rOpt=fzero(zeroFunction,[alphaS/(1-gamma), 1000]);
     
     
     rr = rOpt;
+    % Calculation of optimal biosynthesis
     EE = E(rOpt);
     
 end
     
     
-            
+    % This calculates the stoichiometry of the optimal strategy
 
     function optimalCPGeider = optimalCPGeider(I,T,P)
         [rr, EE]=optimalStrategyGeider(I,T,P);
